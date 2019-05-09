@@ -20,29 +20,34 @@ internal protocol KBVideoEngineDelegate: class {
   func engineDidFinishPlaying(_ engine: KBVideoEngine)
 }
 
-internal class KBVideoEngine: NSObject {
-  private let mainAsset: KBAsset
-  private let alphaAsset: KBAsset
-  private let fpsKeeper: FPSKeeper
-  private lazy var displayLink: CADisplayLink = .init(target: WeakProxy(target: self), selector: #selector(KBVideoEngine.update))
-  internal weak var delegate: KBVideoEngineDelegate? = nil
-  internal weak var updateDelegate: KBVideoEngineUpdateDelegate? = nil
+protocol DisplayLinkDelegate: class {
+  func didUpdated(_ link: CADisplayLink)
+}
+
+class DisplayLink: NSObject {
+  private lazy var displayLink: CADisplayLink = .init(target: self, selector: #selector(DisplayLink.update))
+  private lazy var renderThread: Thread = .init(target: self, selector: #selector(DisplayLink.threadLoop), object: nil)
   private var isRunningTheread = true
-  private lazy var renderThread: Thread = .init(target: WeakProxy(target: self), selector: #selector(KBVideoEngine.threadLoop), object: nil)
-  private lazy var currentFrameIndex: Int = 0
+  weak var delegate: DisplayLinkDelegate? = nil
   
-  public init(mainVideoUrl: URL, alphaVideoUrl: URL, fps: Int) {
-    mainAsset = KBAsset(url: mainVideoUrl)
-    alphaAsset = KBAsset(url: alphaVideoUrl)
-    fpsKeeper = FPSKeeper(fps: fps)
+  static let shared: DisplayLink = .init()
+  var isPaused: Bool {
+    get { return displayLink.isPaused }
+    set { displayLink.isPaused = newValue }
+  }
+  
+  override init() {
     super.init()
     renderThread.start()
-    
+  }
+  
+  deinit {
+    displayLink.remove(from: .current, forMode: .common)
+    displayLink.invalidate()
   }
   
   @objc private func threadLoop() -> Void {
     displayLink.add(to: .current, forMode: .common)
-    displayLink.isPaused = true
     if #available(iOS 10.0, *) {
       displayLink.preferredFramesPerSecond = 0
     } else {
@@ -53,13 +58,24 @@ internal class KBVideoEngine: NSObject {
     }
   }
   
-  func purge() {
-    isRunningTheread = false
+  @objc private func update(_ link: CADisplayLink) {
+    delegate?.didUpdated(link)
   }
-  
-  deinit {
-    displayLink.remove(from: .current, forMode: .common)
-    displayLink.invalidate()
+}
+
+internal class KBVideoEngine: NSObject {
+  private let mainAsset: KBAsset
+  private let alphaAsset: KBAsset
+  private let fpsKeeper: FPSKeeper
+  internal weak var delegate: KBVideoEngineDelegate? = nil
+  internal weak var updateDelegate: KBVideoEngineUpdateDelegate? = nil
+  private lazy var currentFrameIndex: Int = 0
+  private let displayLink = DisplayLink.shared
+  public init(mainVideoUrl: URL, alphaVideoUrl: URL, fps: Int) {
+    mainAsset = KBAsset(url: mainVideoUrl)
+    alphaAsset = KBAsset(url: alphaVideoUrl)
+    fpsKeeper = FPSKeeper(fps: fps)
+    super.init()
   }
   
   private func reset() throws {
@@ -74,25 +90,25 @@ internal class KBVideoEngine: NSObject {
   
   public func play() throws {
     try reset()
-    displayLink.isPaused = false
+    displayLink.delegate = self
   }
   
   public func pause() {
     guard !isCompleted else { return }
-    displayLink.isPaused = true
+    displayLink.delegate = nil
   }
   
   public func resume() {
     guard !isCompleted else { return }
-    displayLink.isPaused = false
+    displayLink.delegate = self
   }
   
   private func finish() {
-    displayLink.isPaused = true
+    displayLink.delegate = nil
     fpsKeeper.clear()
     updateDelegate?.didCompleted()
     delegate?.engineDidFinishPlaying(self)
-    purge()
+//    purge()
   }
   
   @objc private func update(_ link: CADisplayLink) {
@@ -133,6 +149,12 @@ internal class KBVideoEngine: NSObject {
     let main = try mainAsset.copyNextImageBuffer()
     let alpha = try alphaAsset.copyNextImageBuffer()
     return (main, alpha)
+  }
+}
+
+extension KBVideoEngine: DisplayLinkDelegate {
+  func didUpdated(_ link: CADisplayLink) {
+    update(link)
   }
 }
 

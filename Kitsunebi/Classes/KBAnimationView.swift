@@ -60,7 +60,7 @@ open class KBAnimationView: UIView, KBVideoEngineUpdateDelegate, KBVideoEngineDe
   internal var engineInstance: KBVideoEngine? = nil
   
   public func play(mainVideoURL: URL, alphaVideoURL: URL, fps: Int) throws {
-    engineInstance?.purge()
+//    engineInstance?.purge()
     engineInstance = KBVideoEngine(mainVideoUrl: mainVideoURL,
                                    alphaVideoUrl: alphaVideoURL,
                                    fps: fps)
