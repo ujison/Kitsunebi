@@ -22,20 +22,13 @@ final class ResourceStore {
 struct Resource {
   let dirURL: URL
   var name: String { return dirURL.lastPathComponent }
-  var baseVideoURL: URL { return dirURL.appendingPathComponent("/base.mp4") }
-  var alphaVideoURL: URL { return dirURL.appendingPathComponent("/alpha.mp4") }
+  var baseVideoURL: URL { return dirURL.appendingPathComponent("/output.mp4") }
   let fps: Int = 30
 }
 
 extension Resource {
   var baseVideoSize: CGSize? {
     guard let track = AVAsset(url: baseVideoURL).tracks(withMediaType: .video).first else { return nil }
-    let size = track.naturalSize.applying(track.preferredTransform)
-    return CGSize(width: abs(size.width), height: abs(size.height))
-  }
-  
-  var alphaVideoSize: CGSize? {
-    guard let track = AVAsset(url: alphaVideoURL).tracks(withMediaType: .video).first else { return nil }
     let size = track.naturalSize.applying(track.preferredTransform)
     return CGSize(width: abs(size.width), height: abs(size.height))
   }

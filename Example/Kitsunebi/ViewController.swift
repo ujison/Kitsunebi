@@ -34,7 +34,7 @@ final class PreviewViewController: UIViewController {
   
   private func play() throws {
     guard let resource = currentResource else { return }
-    try playerView.play(base: resource.baseVideoURL, alpha: resource.alphaVideoURL, fps: resource.fps)
+    try playerView.play(base: resource.baseVideoURL, fps: resource.fps)
   }
   
   @IBAction func tappedResourceButton(_ sender: Any) {

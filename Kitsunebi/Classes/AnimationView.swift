@@ -38,9 +38,9 @@ open class PlayerView: UIView {
   public weak var delegate: PlayerViewDelegate? = nil
   internal var engineInstance: VideoEngine? = nil
   
-  public func play(base baseVideoURL: URL, alpha alphaVideoURL: URL, fps: Int) throws {
+  public func play(base baseVideoURL: URL, fps: Int) throws {
     engineInstance?.purge()
-    engineInstance = VideoEngine(base: baseVideoURL, alpha: alphaVideoURL, fps: fps)
+    engineInstance = VideoEngine(base: baseVideoURL, fps: fps)
     engineInstance?.updateDelegate = self
     engineInstance?.delegate = self
     try engineInstance?.play()
@@ -94,12 +94,9 @@ open class PlayerView: UIView {
     NotificationCenter.default.removeObserver(self)
   }
   
-  private func renderImage(with basePixelBuffer: CVPixelBuffer, alphaPixelBuffer: CVPixelBuffer, to nextDrawable: CAMetalDrawable) throws {
+  private func renderImage(with basePixelBuffer: CVPixelBuffer, to nextDrawable: CAMetalDrawable) throws {
     let baseYTexture = try textureCache.makeTextureFromImage(basePixelBuffer, pixelFormat: .r8Unorm, planeIndex: 0).texture
     let baseCbCrTexture = try textureCache.makeTextureFromImage(basePixelBuffer, pixelFormat: .rg8Unorm, planeIndex: 1).texture
-    let alphaYTexture = try textureCache.makeTextureFromImage(alphaPixelBuffer, pixelFormat: .r8Unorm, planeIndex: 0).texture
-    let alphaCbCrTexture = try textureCache.makeTextureFromImage(alphaPixelBuffer, pixelFormat: .rg8Unorm, planeIndex: 1).texture
-    
     
     let renderDesc = MTLRenderPassDescriptor()
     renderDesc.colorAttachments[0].texture = nextDrawable.texture
@@ -110,9 +107,7 @@ open class PlayerView: UIView {
       renderEncoder.setVertexBuffer(vertexBuffer, offset: 0, index: 0)
       renderEncoder.setVertexBuffer(texCoordBuffer, offset: 0, index: 1)
       renderEncoder.setFragmentTexture(baseYTexture, index: 0)
-      renderEncoder.setFragmentTexture(alphaYTexture, index: 1)
-      renderEncoder.setFragmentTexture(baseCbCrTexture, index: 2)
-      renderEncoder.setFragmentTexture(alphaCbCrTexture, index: 3)
+      renderEncoder.setFragmentTexture(baseCbCrTexture, index: 1)
       renderEncoder.drawPrimitives(type: .triangleStrip, vertexStart: 0, vertexCount: 4)
       renderEncoder.endEncoding()
       
@@ -152,15 +147,15 @@ open class PlayerView: UIView {
 }
 
 extension PlayerView: VideoEngineUpdateDelegate {
-  internal func didOutputFrame(_ basePixelBuffer: CVPixelBuffer, alphaPixelBuffer: CVPixelBuffer) {
+  func didOutputFrame(_ pixelBuffer: CVPixelBuffer) {
     guard applicationHandler.isActive else { return }
     DispatchQueue.main.async { [weak self] in
       /// `gpuLayer` must access within main-thread.
       guard let nextDrawable = self?.gpuLayer.nextDrawable() else { return }
-      self?.gpuLayer.drawableSize = basePixelBuffer.size
+      self?.gpuLayer.drawableSize = pixelBuffer.size
       self?.renderQueue.async { [weak self] in
         do {
-          try self?.renderImage(with: basePixelBuffer, alphaPixelBuffer: alphaPixelBuffer, to: nextDrawable)
+          try self?.renderImage(with: pixelBuffer, to: nextDrawable)
         } catch {
           self?.clear(nextDrawable: nextDrawable)
         }

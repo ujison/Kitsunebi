@@ -9,7 +9,7 @@ import AVFoundation
 import CoreImage
 
 internal protocol VideoEngineUpdateDelegate: class {
-  func didOutputFrame(_ basePixelBuffer: CVPixelBuffer, alphaPixelBuffer: CVPixelBuffer)
+  func didOutputFrame(_ pixelBuffer: CVPixelBuffer)
   func didReceiveError(_ error: Swift.Error?)
   func didCompleted()
 }
@@ -21,7 +21,6 @@ internal protocol VideoEngineDelegate: class {
 
 internal class VideoEngine: NSObject {
   private let baseAsset: Asset
-  private let alphaAsset: Asset
   private let fpsKeeper: FPSKeeper
   private lazy var displayLink: CADisplayLink = .init(target: WeakProxy(target: self), selector: #selector(VideoEngine.update))
   internal weak var delegate: VideoEngineDelegate? = nil
@@ -30,9 +29,8 @@ internal class VideoEngine: NSObject {
   private lazy var renderThread: Thread = .init(target: WeakProxy(target: self), selector: #selector(VideoEngine.threadLoop), object: nil)
   private lazy var currentFrameIndex: Int = 0
   
-  public init(base baseVideoURL: URL, alpha alphaVideoURL: URL, fps: Int) {
+  public init(base baseVideoURL: URL, fps: Int) {
     baseAsset = Asset(url: baseVideoURL)
-    alphaAsset = Asset(url: alphaVideoURL)
     fpsKeeper = FPSKeeper(fps: fps)
     super.init()
     renderThread.start()
@@ -63,12 +61,10 @@ internal class VideoEngine: NSObject {
   
   private func reset() throws {
     try baseAsset.reset()
-    try alphaAsset.reset()
   }
   
   private func cancelReading() {
     baseAsset.cancelReading()
-    alphaAsset.cancelReading()
   }
   
   public func play() throws {
@@ -107,7 +103,7 @@ internal class VideoEngine: NSObject {
   }
   
   private var isCompleted: Bool {
-    return baseAsset.status == .completed || alphaAsset.status == .completed
+    return baseAsset.status == .completed
   }
   
   private func updateFrame() {
@@ -117,8 +113,9 @@ internal class VideoEngine: NSObject {
       return
     }
     do {
-      let (basePixelBuffer, alphaPixelBuffer) = try copyNextSampleBuffer()
-      updateDelegate?.didOutputFrame(basePixelBuffer, alphaPixelBuffer: alphaPixelBuffer)
+      let basePixelBuffer = try baseAsset.copyNextImageBuffer()
+//      updateDelegate?.didOutputFrame(basePixelBuffer, alphaPixelBuffer: alphaPixelBuffer)
+      updateDelegate?.didOutputFrame(basePixelBuffer)
       
       currentFrameIndex += 1
       delegate?.didUpdateFrame(currentFrameIndex, engine: self)
@@ -126,12 +123,6 @@ internal class VideoEngine: NSObject {
       updateDelegate?.didReceiveError(error)
       finish()
     }
-  }
-  
-  private func copyNextSampleBuffer() throws -> (CVImageBuffer, CVImageBuffer) {
-    let base = try baseAsset.copyNextImageBuffer()
-    let alpha = try alphaAsset.copyNextImageBuffer()
-    return (base, alpha)
   }
 }
 

@@ -91,10 +91,8 @@ extension ResourceViewController: UITableViewDelegate, UITableViewDataSource {
     let resource = resourceStore.resources[indexPath.row]
     cell.textLabel?.text = resource.name
     let mSize = resource.baseVideoSize
-    let aSize = resource.alphaVideoSize
     let baseText = mSize != nil ? "Base w\(mSize!.width) x h\(mSize!.height)" : "base.mp4 not found"
-    let alphaText = aSize != nil ? "Alpha: w\(aSize!.width) x h\(aSize!.height)" : "alpha.mp4 not found"
-    cell.detailTextLabel?.text = "\(baseText) / \(alphaText)"
+    cell.detailTextLabel?.text = "\(baseText)"
     if let selected = selectedResource, selected.name == resource.name {
       cell.accessoryType = .checkmark
     } else {
